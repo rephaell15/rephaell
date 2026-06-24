@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard HIV Kota Bogor 2024</title>
+
+  <!-- Leaflet (peta interaktif) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js (grafik) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ============================================================
+       GLOBAL & RESET
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --red-dark  : #b71c1c;
+      --red       : #e53935;
+      --orange    : #fb8c00;
+      --yellow    : #fdd835;
+      --green     : #43a047;
+      --navy      : #1a237e;
+      --navy-mid  : #283593;
+      --bg        : #f0f2f5;
+      --card      : #ffffff;
+      --border    : #e0e0e0;
+      --text      : #212121;
+      --muted     : #757575;
+      --radius    : 12px;
+      --shadow    : 0 2px 12px rgba(0,0,0,.10);
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 60%, #1565c0 100%);
+      color: #fff;
+      padding: 28px 32px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,.25);
+    }
+    .header-left h1 { font-size: 22px; font-weight: 700; line-height: 1.25; }
+    .header-left p  { font-size: 13px; opacity: .80; margin-top: 4px; }
+    .header-badge {
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.30);
+      border-radius: 8px;
+      padding: 8px 18px;
+      text-align: center;
+      backdrop-filter: blur(4px);
+    }
+    .header-badge .num  { font-size: 28px; font-weight: 800; line-height: 1; }
+    .header-badge .lbl  { font-size: 11px; opacity: .80; margin-top: 2px; }
+
+    /* ============================================================
+       NAV TABS
+    ============================================================ */
+    nav {
+      background: var(--card);
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      gap: 0;
+      padding: 0 24px;
+      overflow-x: auto;
+    }
+    nav button {
+      background: none;
+      border: none;
+      padding: 14px 22px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: color .2s, border-color .2s;
+    }
+    nav button:hover   { color: var(--navy); }
+    nav button.active  { color: var(--navy); border-bottom-color: var(--navy); font-weight: 700; }
+
+    /* ============================================================
+       MAIN CONTENT
+    ============================================================ */
+    main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+    /* Tab panels */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ============================================================
+       STAT CARDS (baris ringkasan)
+    ============================================================ */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      border-left: 5px solid var(--navy);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-card .icon { font-size: 24px; }
+    .stat-card .val  { font-size: 26px; font-weight: 800; color: var(--navy); line-height: 1; }
+    .stat-card .lbl  { font-size: 12px; color: var(--muted); }
+
+    /* ============================================================
+       CARD (generic)
+    ============================================================ */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px; height: 18px;
+      background: var(--navy);
+      border-radius: 2px;
+    }
+
+    /* ============================================================
+       GRID LAYOUT (2 kolom)
+    ============================================================ */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ============================================================
+       PETA INTERAKTIF
+    ============================================================ */
+    #map { height: 500px; border-radius: 10px; z-index: 1; }
+
+    /* ============================================================
+       TABEL KECAMATAN
+    ============================================================ */
+    .tabel-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th {
+      background: var(--navy);
+      color: #fff;
+      padding: 11px 14px;
+      text-align: left;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background .15s; }
+    tbody tr:hover { background: #f5f7ff; }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+
+    /* Badge kategori */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .badge-st { background: var(--red-dark); }
+    .badge-t  { background: var(--orange); color: #000; }
+    .badge-s  { background: var(--yellow); color: #000; }
+    .badge-r  { background: var(--green); }
+
+    /* Progress bar kasus */
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-bg   { flex: 1; background: #eee; border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+
+    /* ============================================================
+       DIAGRAM PER KECAMATAN (6 panel)
+    ============================================================ */
+    .kec-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 4px;
+    }
+    @media (max-width: 1000px) { .kec-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px)  { .kec-grid { grid-template-columns: 1fr; } }
+
+    .kec-panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 18px;
+    }
+    .kec-panel h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 4px;
+    }
+    .kec-panel .kec-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .kel-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+    }
+    .kel-nama {
+      font-size: 11.5px;
+      width: 110px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kel-bar-bg   { flex: 1; height: 10px; background: #eee; border-radius: 4px; overflow: hidden; }
+    .kel-bar-fill { height: 100%; border-radius: 4px; }
+    .kel-num      { font-size: 11px; font-weight: 700; width: 22px; text-align: right; flex-shrink: 0; }
+
+    /* ============================================================
+       CANVAS CHART HEIGHT
+    ============================================================ */
+    .chart-wrap { position: relative; }
+    .chart-wrap canvas { max-height: 320px; }
+    .chart-wrap-tall canvas { max-height: 400px; }
+
+    /* ============================================================
+       TOOLTIP PETA CUSTOM
+    ============================================================ */
+    .leaflet-tooltip {
+      border-radius: 8px !important;
+      border: 1px solid #ddd !important;
+      box-shadow: 0 3px 10px rgba(0,0,0,.15) !important;
+      padding: 10px 14px !important;
+      font-family: 'Segoe UI', Arial, sans-serif !important;
+      font-size: 13px !important;
+    }
+
+    /* ============================================================
+       CATATAN / DISCLAIMER
+    ============================================================ */
+    .disclaimer {
+      background: #fff8e1;
+      border-left: 4px solid #f9a825;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-size: 12px;
+      color: #5d4037;
+      margin-bottom: 20px;
+    }
+
+    /* ============================================================
+       FOOTER
+    ============================================================ */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+================================================================ -->
+<header>
+  <div class="header-left">
+    <h1>🏥 Dashboard Penyebaran HIV<br>Kota Bogor</h1>
+    <p>Mata Kuliah Perencanaan Perangkat Lunak &nbsp;|&nbsp; Sumber: Dinkes Jawa Barat (Open Data Jabar)</p>
+  </div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div class="header-badge">
+      <div class="num">411</div>
+      <div class="lbl">Total Kasus 2024</div>
+    </div>
+    <div class="header-badge">
+      <div class="num">6</div>
+      <div class="lbl">Kecamatan</div>
+    </div>
+    <div class="header-badge">
+      <div class="num">68</div>
+      <div class="lbl">Kelurahan</div>
+    </div>
+  </div>
+</header>
+
+<!-- ================================================================
+     NAV TABS
+================================================================ -->
+<nav>
+  <button class="active" onclick="switchTab('ringkasan')">📊 Ringkasan</button>
+  <button onclick="switchTab('peta')">🗺️ Peta Interaktif</button>
+  <button onclick="switchTab('kecamatan')">📈 Per Kecamatan</button>
+  <button onclick="switchTab('kelurahan')">🏘️ Per Kelurahan</button>
+  <button onclick="switchTab('tren')">📉 Tren & Statistik</button>
+</nav>
+
+<!-- ================================================================
+     MAIN
+================================================================ -->
+<main>
+
+<!-- ---- TAB 1: RINGKASAN ---------------------------------------- -->
+<div id="tab-ringkasan" class="tab-panel active">
+
+  <!-- Stat cards -->
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="disclaimer">
+    ⚠️ <b>Catatan Metodologi:</b> Data resmi tersedia di tingkat kota (total 411 kasus, 2024).
+    Distribusi per kecamatan dan kelurahan adalah <b>estimasi akademis</b> berbasis bobot epidemiologi
+    untuk keperluan visualisasi mata kuliah.
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Estimasi Kasus per Kecamatan</div>
+      <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Proporsi Kasus (Pie Chart)</div>
+      <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Tabel Ringkasan Kecamatan</div>
+    <div class="tabel-wrapper" id="tabel-ringkasan"></div>
+  </div>
+</div>
+
+<!-- ---- TAB 2: PETA -------------------------------------------- -->
+<div id="tab-peta" class="tab-panel">
+  <div class="disclaimer">
+    🗺️ Hover ke wilayah untuk lihat info kelurahan. Klik untuk detail kecamatan.
+    Warna menunjukkan estimasi jumlah kasus HIV per kecamatan.
+  </div>
+  <div class="card" style="padding:12px;">
+    <div id="map"></div>
+  </div>
+  <!-- Legenda peta -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-title">Keterangan Warna Peta</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;">
+      <span><span style="display:inline-block;width:16px;height:16px;background:#b71c1c;border-radius:3px;vertical-align:middle;margin-right:6px;"></span>≥ 80 kasus — Sangat Tinggi</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#e53935;border-radius:3px;vertical-align:middle;margin-right:6px;"></span>70–79 kasus — Sangat Tinggi</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#fb8c00;border-radius:3px;vertical-align:middle;margin-right:6px;"></span>60–69 kasus — Tinggi</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#43a047;border-radius:3px;vertical-align:middle;margin-right:6px;"></span>&lt; 60 kasus — Sedang</span>
+    </div>
+  </div>
+</div>
+
+<!-- ---- TAB 3: PER KECAMATAN ---------------------------------- -->
+<div id="tab-kecamatan" class="tab-panel">
+  <div class="disclaimer">
+    📈 Perbandingan antar kecamatan berdasarkan estimasi kasus, prevalensi, dan jumlah fasilitas kesehatan.
+  </div>
+
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-title">Prevalensi per 10.000 Penduduk</div>
+      <div class="chart-wrap"><canvas id="chartPrevalensi"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Radar: Profil Risiko Kecamatan</div>
+      <div class="chart-wrap"><canvas id="chartRadar"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Detail Perbandingan Antar Kecamatan</div>
+    <div class="tabel-wrapper" id="tabel-kecamatan"></div>
+  </div>
+</div>
+
+<!-- ---- TAB 4: PER KELURAHAN ---------------------------------- -->
+<div id="tab-kelurahan" class="tab-panel">
+  <div class="disclaimer">
+    🏘️ Estimasi kasus HIV per kelurahan di setiap kecamatan Kota Bogor 2024.
+  </div>
+  <div class="kec-grid" id="kec-grid"></div>
+</div>
+
+<!-- ---- TAB 5: TREN & STATISTIK ------------------------------- -->
+<div id="tab-tren" class="tab-panel">
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-title">Tren Kasus Baru per Tahun (2018–2024)</div>
+      <div class="chart-wrap chart-wrap-tall"><canvas id="chartTren"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Kumulatif Total Kasus</div>
+      <div class="chart-wrap chart-wrap-tall"><canvas id="chartKumulatif"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Statistik Deskriptif</div>
+    <div id="stat-desk"></div>
+  </div>
+
+  <div class="card" style="background:linear-gradient(135deg,#e8eaf6,#fff);">
+    <div class="card-title">Kesimpulan & Rekomendasi</div>
+    <div id="kesimpulan"></div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  Dashboard HIV Kota Bogor 2024 &nbsp;|&nbsp;
+  Sumber: Dinas Kesehatan Provinsi Jawa Barat — Open Data Jabar &nbsp;|&nbsp;
+  GeoJSON: HDX-BPS-2020 &nbsp;|&nbsp;
+  Mata Kuliah Perencanaan Perangkat Lunak
+</footer>
+
+<!-- ================================================================
+     SCRIPTS
+================================================================ -->
+<script src="data.js"></script>
+<script>
+/* ============================================================
+   WARNA & HELPER
+============================================================ */
+const WARNA_KEC = {
+  'Bogor Tengah':  '#b71c1c',
+  'Bogor Selatan': '#e53935',
+  'Tanah Sereal':  '#ef6c00',
+  'Bogor Utara':   '#c62828',
+  'Bogor Barat':   '#fb8c00',
+  'Bogor Timur':   '#d84315',
+};
+const WARNA_BADGE = {
+  'Sangat Tinggi': 'badge-st',
+  'Tinggi':        'badge-t',
+  'Sedang':        'badge-s',
+  'Rendah':        'badge-r',
+};
+
+// Ambil data kecamatan sebagai array terurut (terbanyak ke tersedikit)
+const kecArr = Object.entries(DATA_HIV.kecamatan)
+  .sort((a, b) => b[1].kasus - a[1].kasus);
+
+const MAX_KASUS = kecArr[0][1].kasus;
+
+/* ============================================================
+   TAB SWITCHING
+============================================================ */
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+
+  // Inisialisasi peta baru saat tab peta aktif
+  if (name === 'peta' && !window._mapInited) {
+    initMap();
+    window._mapInited = true;
+  }
+}
+
+/* ============================================================
+   TAB 1 — RINGKASAN: STAT CARDS
+============================================================ */
+function buildStatCards() {
+  const total  = DATA_HIV.total;
+  const kecMax = kecArr[0];
+  const kecMin = kecArr[kecArr.length - 1];
+  const rata   = (total / kecArr.length).toFixed(1);
+
+  const cards = [
+    { icon:'🦠', val: total,                   lbl:'Total Kasus HIV (2024)', border:'#e53935' },
+    { icon:'🏙️', val: kecArr.length,            lbl:'Kecamatan Terdata',      border:'#1a237e' },
+    { icon:'🏘️', val: 68,                       lbl:'Kelurahan',              border:'#1565c0' },
+    { icon:'🔴', val: kecMax[1].kasus,          lbl:`Kasus Tertinggi (${kecMax[0]})`, border:'#b71c1c' },
+    { icon:'🟢', val: kecMin[1].kasus,          lbl:`Kasus Terendah (${kecMin[0]})`,  border:'#43a047' },
+    { icon:'📊', val: rata,                     lbl:'Rata-rata per Kecamatan',border:'#fb8c00' },
+  ];
+
+  const row = document.getElementById('stat-row');
+  row.innerHTML = cards.map(c => `
+    <div class="stat-card" style="border-left-color:${c.border}">
+      <div class="icon">${c.icon}</div>
+      <div class="val">${c.val}</div>
+      <div class="lbl">${c.lbl}</div>
+    </div>`).join('');
+}
+
+/* ============================================================
+   TAB 1 — BAR CHART
+============================================================ */
+function buildBarChart() {
+  const labels = kecArr.map(([n]) => n);
+  const values = kecArr.map(([, d]) => d.kasus);
+  const colors = kecArr.map(([n]) => WARNA_KEC[n] || '#1a237e');
+
+  new Chart(document.getElementById('chartBar'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Estimasi Kasus HIV',
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw} kasus (${((ctx.raw/DATA_HIV.total)*100).toFixed(1)}%)`,
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          grid: { color: '#eee' },
+          ticks: { font: { size: 11 } }
+        },
+        x: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   TAB 1 — PIE CHART
+============================================================ */
+function buildPieChart() {
+  const labels = kecArr.map(([n]) => n);
+  const values = kecArr.map(([, d]) => d.kasus);
+  const colors = kecArr.map(([n]) => WARNA_KEC[n] || '#1a237e');
+
+  new Chart(document.getElementById('chartPie'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '45%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.raw} kasus (${((ctx.raw/DATA_HIV.total)*100).toFixed(1)}%)`
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   TAB 1 — TABEL RINGKASAN
+============================================================ */
+function buildTabelRingkasan() {
+  const rows = kecArr.map(([nama, d], i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><b>${nama}</b></td>
+      <td>${d.jml_kelurahan}</td>
+      <td>${d.pop.toLocaleString()} rb</td>
+      <td>
+        <div class="bar-wrap">
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:${(d.kasus/MAX_KASUS*100).toFixed(0)}%;background:${WARNA_KEC[nama]}"></div>
+          </div>
+          <b>${d.kasus}</b>
+        </div>
+      </td>
+      <td>${d.persen}%</td>
+      <td>${d.prev}</td>
+      <td><span class="badge ${WARNA_BADGE[d.kategori]}">${d.kategori}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('tabel-ringkasan').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Kecamatan</th><th>Kel.</th>
+          <th>Populasi</th><th>Est. Kasus</th>
+          <th>% Kota</th><th>Prev./10rb</th><th>Kategori</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* ============================================================
+   TAB 2 — PETA INTERAKTIF (LEAFLET)
+============================================================ */
+function getWarnaMap(kasus) {
+  if (kasus >= 80) return '#b71c1c';
+  if (kasus >= 70) return '#e53935';
+  if (kasus >= 60) return '#fb8c00';
+  return '#43a047';
+}
+
+function initMap() {
+  const map = L.map('map').setView([-6.5971, 106.806], 12);
+
+  // Tile layer (peta dasar)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Muat GeoJSON
+  fetch('map.geojson')
+    .then(r => r.json())
+    .then(geo => {
+      // Buat kamus kecamatan → data
+      const kecMap = {};
+      Object.entries(DATA_HIV.kecamatan).forEach(([n, d]) => kecMap[n] = d);
+
+      L.geoJSON(geo, {
+        style: feature => {
+          const kec   = feature.properties.district;
+          const kasus = kecMap[kec]?.kasus || 0;
+          return {
+            fillColor:   getWarnaMap(kasus),
+            color:       '#fff',
+            weight:      1,
+            fillOpacity: 0.75,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const kec   = feature.properties.district;
+          const kel   = feature.properties.village;
+          const info  = kecMap[kec] || {};
+
+          // Tooltip saat hover
+          layer.bindTooltip(`
+            <div>
+              <b>🏘️ Kel. ${kel}</b><br>
+              📍 Kec. ${kec}<br>
+              🦠 Est. Kasus : <b>${info.kasus || '-'} orang</b><br>
+              📊 Prev./10rb : <b>${info.prev || '-'}</b><br>
+              ⚠️ Kategori   : <b>${info.kategori || '-'}</b>
+            </div>`, { sticky: true });
+
+          // Popup saat klik
+          layer.bindPopup(`
+            <div style="min-width:200px;font-family:Arial">
+              <h4 style="color:#b71c1c;margin:0 0 8px">Kec. ${kec}</h4>
+              <hr style="margin:0 0 8px">
+              <table style="font-size:13px;width:100%">
+                <tr><td>🦠 Est. Kasus</td><td><b>${info.kasus} orang</b></td></tr>
+                <tr><td>📊 Proporsi</td><td><b>${info.persen}%</b></td></tr>
+                <tr><td>📈 Prevalensi</td><td><b>${info.prev}/10rb</b></td></tr>
+                <tr><td>⚠️ Kategori</td><td><b>${info.kategori}</b></td></tr>
+                <tr><td>🏥 Faskes</td><td><b>${info.faskes} unit</b></td></tr>
+              </table>
+            </div>`);
+
+          // Highlight saat hover
+          layer.on('mouseover', function() {
+            this.setStyle({ weight: 2.5, color: '#333', fillOpacity: 0.9 });
+          });
+          layer.on('mouseout', function() {
+            this.setStyle({ weight: 1, color: '#fff', fillOpacity: 0.75 });
+          });
+        }
+      }).addTo(map);
+    });
+}
+
+/* ============================================================
+   TAB 3 — PREVALENSI CHART
+============================================================ */
+function buildPrevalensiChart() {
+  const labels = kecArr.map(([n]) => n);
+  const values = kecArr.map(([, d]) => d.prev);
+  const colors = kecArr.map(([n]) => WARNA_KEC[n]);
+
+  new Chart(document.getElementById('chartPrevalensi'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Prevalensi per 10.000 Penduduk',
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',  // horizontal bar
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.raw} per 10.000 penduduk` }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#eee' } },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   TAB 3 — RADAR CHART
+============================================================ */
+function buildRadarChart() {
+  // Normalisasi 0-10 untuk setiap indikator
+  function norm(arr) {
+    const mn = Math.min(...arr), mx = Math.max(...arr);
+    return arr.map(v => +((v - mn) / (mx - mn) * 10).toFixed(1));
+  }
+
+  const kasus = kecArr.map(([, d]) => d.kasus);
+  const prev  = kecArr.map(([, d]) => d.prev);
+  const pop   = kecArr.map(([, d]) => d.pop);
+  const faskes= kecArr.map(([, d]) => d.faskes);
+
+  // Ambil 3 kecamatan teratas untuk radar
+  const top3 = kecArr.slice(0, 3);
+  const COLORS_RADAR = ['#e53935','#fb8c00','#1a237e'];
+
+  const datasets = top3.map(([nama, d], i) => {
+    const idxAll = kecArr.findIndex(([n]) => n === nama);
+    return {
+      label: nama,
+      data: [
+        norm(kasus)[idxAll],
+        norm(prev)[idxAll],
+        norm(pop)[idxAll],
+        norm(faskes)[idxAll],
+        // Inversi faskes: lebih sedikit faskes = lebih berisiko
+        +(10 - norm(faskes)[idxAll]).toFixed(1),
+      ],
+      backgroundColor: COLORS_RADAR[i] + '30',
+      borderColor: COLORS_RADAR[i],
+      borderWidth: 2,
+      pointBackgroundColor: COLORS_RADAR[i],
+    };
+  });
+
+  new Chart(document.getElementById('chartRadar'), {
+    type: 'radar',
+    data: {
+      labels: ['Kasus HIV', 'Prevalensi', 'Populasi', 'Faskes', 'Risiko Akses'],
+      datasets
+    },
+    options: {
+      responsive: true,
+      scales: {
+        r: {
+          min: 0, max: 10,
+          ticks: { display: false },
+          grid: { color: '#ddd' },
+          pointLabels: { font: { size: 11 } }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 10, boxWidth: 12 }
+        }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   TAB 3 — TABEL DETAIL KECAMATAN
+============================================================ */
+function buildTabelKecamatan() {
+  const rows = kecArr.map(([nama, d], i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><b>${nama}</b></td>
+      <td>${d.jml_kelurahan}</td>
+      <td>${d.pop.toLocaleString()} rb</td>
+      <td style="color:${WARNA_KEC[nama]};font-weight:700">${d.kasus}</td>
+      <td>${d.persen}%</td>
+      <td>${d.prev}</td>
+      <td>${d.faskes} unit</td>
+      <td><span class="badge ${WARNA_BADGE[d.kategori]}">${d.kategori}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('tabel-kecamatan').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Kecamatan</th><th>Kel.</th><th>Populasi</th>
+          <th>Est.Kasus</th><th>%</th><th>Prev./10rb</th>
+          <th>Faskes</th><th>Kategori</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* ============================================================
+   TAB 4 — KELURAHAN PANELS (6 kecamatan)
+============================================================ */
+function buildKelurahanPanels() {
+  const grid = document.getElementById('kec-grid');
+  const maxKel = 18; // max kasus kelurahan untuk skala bar
+
+  grid.innerHTML = kecArr.map(([nama, d]) => {
+    const items = d.kelurahan.map(kel => {
+      const pct = (kel.kasus / maxKel * 100).toFixed(0);
+      return `
+        <div class="kel-item">
+          <div class="kel-nama" title="${kel.nama}">${kel.nama}</div>
+          <div class="kel-bar-bg">
+            <div class="kel-bar-fill" style="width:${pct}%;background:${WARNA_KEC[nama]}"></div>
+          </div>
+          <div class="kel-num" style="color:${WARNA_KEC[nama]}">${kel.kasus}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="kec-panel">
+        <h3>Kec. ${nama}</h3>
+        <div class="kec-sub">
+          Total: <b>${d.kasus} kasus</b> &nbsp;|&nbsp; ${d.jml_kelurahan} kelurahan &nbsp;|&nbsp;
+          <span class="badge ${WARNA_BADGE[d.kategori]}">${d.kategori}</span>
+        </div>
+        ${items}
+      </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   TAB 5 — TREN CHART
+============================================================ */
+function buildTrenChart() {
+  const tahun  = DATA_HIV.tren.map(t => t.tahun);
+  const kasus  = DATA_HIV.tren.map(t => t.kasus);
+  const kumul  = DATA_HIV.tren.map(t => t.kumulatif);
+
+  // Kasus baru
+  new Chart(document.getElementById('chartTren'), {
+    type: 'bar',
+    data: {
+      labels: tahun,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Kasus Baru',
+          data: kasus,
+          backgroundColor: kasus.map((_, i) =>
+            i === kasus.length - 1 ? '#b71c1c' : '#ef9a9a'),
+          borderRadius: 5,
+        },
+        {
+          type: 'line',
+          label: 'Tren',
+          data: kasus,
+          borderColor: '#1a237e',
+          borderWidth: 2,
+          pointBackgroundColor: '#1a237e',
+          tension: 0.35,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11} } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw} kasus` } }
+      },
+      scales: {
+        y: { beginAtZero: false, min: 250, grid: { color:'#eee' } }
+      }
+    }
+  });
+
+  // Kumulatif
+  new Chart(document.getElementById('chartKumulatif'), {
+    type: 'line',
+    data: {
+      labels: tahun,
+      datasets: [{
+        label: 'Total Kumulatif',
+        data: kumul,
+        borderColor: '#b71c1c',
+        backgroundColor: 'rgba(183,28,28,.10)',
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.35,
+        pointBackgroundColor: '#b71c1c',
+        pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels:{font:{size:11}} },
+        tooltip: { callbacks: { label: ctx => ` Kumulatif: ${ctx.raw.toLocaleString()} kasus` } }
+      },
+      scales: { y: { grid:{color:'#eee'} } }
+    }
+  });
+}
+
+/* ============================================================
+   TAB 5 — STATISTIK DESKRIPTIF
+============================================================ */
+function buildStatDeskriptif() {
+  const values = kecArr.map(([, d]) => d.kasus);
+  const n      = values.length;
+  const rata   = (values.reduce((a,b)=>a+b,0)/n).toFixed(1);
+  const sorted = [...values].sort((a,b)=>a-b);
+  const median = sorted[Math.floor(n/2)];
+  const varian = (values.reduce((a,b)=>a+Math.pow(b-rata,2),0)/n).toFixed(1);
+  const std    = Math.sqrt(varian).toFixed(1);
+  const min    = Math.min(...values);
+  const max    = Math.max(...values);
+
+  const statsData = [
+    ['Jumlah Kecamatan', n, ''],
+    ['Total Kasus (Resmi)', DATA_HIV.total, 'orang'],
+    ['Rata-rata/Kecamatan', rata, 'kasus'],
+    ['Median', median, 'kasus'],
+    ['Standar Deviasi', std, ''],
+    ['Nilai Minimum', min, `kasus (${kecArr[kecArr.length-1][0]})`],
+    ['Nilai Maksimum', max, `kasus (${kecArr[0][0]})`],
+    ['Koef. Variasi', ((std/rata)*100).toFixed(1)+'%', '(keberagaman)'],
+  ];
+
+  document.getElementById('stat-desk').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      ${statsData.map(([lbl, val, satuan]) => `
+        <div style="background:#f5f7ff;border-radius:8px;padding:14px 16px;border-left:4px solid #1a237e;">
+          <div style="font-size:11px;color:#757575;margin-bottom:4px">${lbl}</div>
+          <div style="font-size:20px;font-weight:800;color:#1a237e">${val}</div>
+          <div style="font-size:11px;color:#9e9e9e">${satuan}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ============================================================
+   TAB 5 — KESIMPULAN
+============================================================ */
+function buildKesimpulan() {
+  const top    = kecArr[0];
+  const bottom = kecArr[kecArr.length - 1];
+  const tinggi = kecArr.filter(([,d]) => ['Sangat Tinggi','Tinggi'].includes(d.kategori)).map(([n])=>n);
+
+  document.getElementById('kesimpulan').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13.5px;line-height:1.8;">
+      <div>
+        <div style="font-weight:700;color:#b71c1c;margin-bottom:8px">🔍 Temuan Utama</div>
+        <ul style="padding-left:18px;color:#333">
+          <li>Total kasus HIV Kota Bogor 2024: <b>${DATA_HIV.total} orang</b></li>
+          <li>Kecamatan tertinggi: <b>${top[0]}</b> (${top[1].kasus} kasus, ${top[1].persen}%)</li>
+          <li>Kecamatan terendah: <b>${bottom[0]}</b> (${bottom[1].kasus} kasus)</li>
+          <li>Kecamatan risiko tinggi: <b>${tinggi.join(', ')}</b></li>
+          <li>Prevalensi tertinggi: <b>${kecArr[0][0]}</b> (${kecArr[0][1].prev}/10rb pddk)</li>
+          <li>Tren kasus naik <b>+44.2%</b> dari 2018 ke 2024</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-weight:700;color:#43a047;margin-bottom:8px">✅ Rekomendasi</div>
+        <ul style="padding-left:18px;color:#333">
+          <li>Tingkatkan layanan VCT di <b>${tinggi.slice(0,2).join(' & ')}</b></li>
+          <li>Program edukasi berkala di seluruh 6 kecamatan</li>
+          <li>Perkuat surveilans epidemiologi level kelurahan</li>
+          <li>Kolaborasi Dinkes, Puskesmas, LSM, dan komunitas</li>
+          <li>Siapkan data disagregasi resmi per kecamatan</li>
+          <li>Sistem informasi real-time untuk pemantauan kasus</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:#fff8e1;border-radius:6px;font-size:12px;color:#5d4037;">
+      ⚠️ <b>Sumber:</b> Dinas Kesehatan Provinsi Jawa Barat (Open Data Jabar) &nbsp;|&nbsp;
+      GeoJSON: HDX-BPS-2020 &nbsp;|&nbsp;
+      Data per kecamatan = estimasi akademis
+    </div>`;
+}
+
+/* ============================================================
+   INIT — Jalankan semua saat halaman dimuat
+============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  buildStatCards();
+  buildBarChart();
+  buildPieChart();
+  buildTabelRingkasan();
+  buildPrevalensiChart();
+  buildRadarChart();
+  buildTabelKecamatan();
+  buildKelurahanPanels();
+  buildTrenChart();
+  buildStatDeskriptif();
+  buildKesimpulan();
+});
+</script>
+</body>
+</html>
